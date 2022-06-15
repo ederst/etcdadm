@@ -54,6 +54,7 @@ type OpenstackVolumes struct {
 
 	matchTagKeys []string
 	matchTags    map[string]string
+	ipFilter     *net.IPNet
 
 	computeClient *gophercloud.ServiceClient
 	volumeClient  *gophercloud.ServiceClient
@@ -69,7 +70,7 @@ type OpenstackVolumes struct {
 var _ volumes.Volumes = &OpenstackVolumes{}
 
 // NewOpenstackVolumes builds a OpenstackVolume
-func NewOpenstackVolumes(clusterName string, volumeTags []string, nameTag string) (*OpenstackVolumes, error) {
+func NewOpenstackVolumes(clusterName string, volumeTags []string, nameTag string, ipFilter *net.IPNet) (*OpenstackVolumes, error) {
 
 	metadata, err := getLocalMetadata()
 	if err != nil {
@@ -81,6 +82,7 @@ func NewOpenstackVolumes(clusterName string, volumeTags []string, nameTag string
 		meta:        metadata,
 		matchTags:   make(map[string]string),
 		nameTag:     nameTag,
+		ipFilter:    ipFilter,
 	}
 
 	for _, volumeTag := range volumeTags {
@@ -234,7 +236,7 @@ func (stack *OpenstackVolumes) discoverTags() error {
 		if mc.ObserveRequest(err) != nil {
 			return fmt.Errorf("failed to retrieve server information from cloud: %v", err)
 		}
-		ip, err := GetServerFixedIP(extendedServer.Addresses, extendedServer.Name)
+		ip, err := GetServerFixedIP(extendedServer.Addresses, extendedServer.Name, stack.ipFilter)
 		if err != nil {
 			return fmt.Errorf("error querying InternalIP from name: %v", err)
 		}

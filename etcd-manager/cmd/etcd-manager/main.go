@@ -100,6 +100,8 @@ func main() {
 	var volumeTags stringSliceFlag
 	flag.Var(&volumeTags, "volume-tag", "tag which volume is required to have")
 
+	flag.StringVar(&o.IPFilter, "ip-filter", o.IPFilter, "filter IP addresses with CIDR notation")
+
 	flag.Parse()
 
 	o.VolumeTags = volumeTags
@@ -161,6 +163,9 @@ type EtcdManagerOptions struct {
 
 	// EtcdManagerMetricsPort allows exposing statistics from etcd-manager
 	EtcdManagerMetricsPort int
+
+	// IPFilter allows filtering for IP addresses with CIDR notation
+	IPFilter string
 }
 
 // InitDefaults populates the default flag values
@@ -189,6 +194,21 @@ func (o *EtcdManagerOptions) InitDefaults() {
 	o.Insecure = false
 	o.EtcdInsecure = false
 	o.EtcdManagerMetricsPort = 0
+
+	o.IPFilter = ""
+}
+
+func parseIPFilter(o *EtcdManagerOptions) (*net.IPNet, error) {
+	if o.IPFilter == "" {
+		return nil, nil
+	}
+
+	if o.VolumeProviderID != "openstack" {
+		return nil, fmt.Errorf("is only supported with provider 'openstack'")
+	}
+
+	_, parsedIPFilter, err := net.ParseCIDR(o.IPFilter)
+	return parsedIPFilter, err
 }
 
 // RunEtcdManager runs the etcd-manager, returning only we should exit.
@@ -199,6 +219,11 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 
 	if o.BackupStorePath == "" {
 		return fmt.Errorf("backup-store is required")
+	}
+
+	parsedIPFilter, err := parseIPFilter(o)
+	if err != nil {
+		return fmt.Errorf("ip-filter %s", err)
 	}
 
 	backupInterval, err := time.ParseDuration(o.BackupInterval)
@@ -243,7 +268,7 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 			discoveryProvider = gceVolumeProvider
 
 		case "openstack":
-			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag)
+			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag, parsedIPFilter)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
