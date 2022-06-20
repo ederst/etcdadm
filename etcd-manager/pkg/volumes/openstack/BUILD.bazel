@@ -33,7 +33,7 @@ go_test(
     name = "openstack_test",
     srcs = [
         "util_test.go",
-        "volumes_test.go"
+        "volumes_test.go",
     ],
     data = glob(["testdata/**"]),
     embed = [":openstack"],
