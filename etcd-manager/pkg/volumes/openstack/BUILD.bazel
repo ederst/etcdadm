@@ -24,12 +24,22 @@ go_library(
         "//vendor/github.com/prometheus/client_golang/prometheus",
         "//vendor/gopkg.in/gcfg.v1:gcfg_v1",
         "//vendor/k8s.io/klog/v2:klog",
+        "//vendor/k8s.io/mount-utils",
         "//vendor/k8s.io/utils/exec",
     ],
 )
 
 go_test(
     name = "openstack_test",
-    srcs = ["util_test.go"],
+    srcs = [
+        "util_test.go",
+        "volumes_test.go"
+    ],
+    data = glob(["testdata/**"]),
     embed = [":openstack"],
+    deps = [
+        "//vendor/k8s.io/mount-utils",
+        "//vendor/k8s.io/utils/exec",
+        "//vendor/k8s.io/utils/exec/testing",
+    ],
 )
