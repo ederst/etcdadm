@@ -3,13 +3,13 @@ name: tag-release
 on:
   push:
     branches:
-      - master
+      - fork-master
     paths:
       - etcd-manager/version.txt
 
 jobs:
   tag-release:
-    if: ${{ github.repository == 'kubernetes-sigs/etcdadm' }}
+    if: ${{ github.repository == 'ederst/etcdadm' }}
     runs-on: ubuntu-20.04
 
     permissions:
