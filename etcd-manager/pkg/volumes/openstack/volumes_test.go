@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -51,16 +50,6 @@ var expectedDriveMetadata = &InstanceMetadata{
 	Name:             "test-server",
 	AvailabilityZone: "nova",
 	ProjectID:        "0123456789abcdeffedcba9876543210",
-}
-
-func assertTestResults(t *testing.T, err error, expected interface{}, actual interface{}) {
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if !reflect.DeepEqual(expected, actual) {
-		t.Fatalf("expected '%+v', but got '%+v'", expected, actual)
-	}
 }
 
 // mockMetadataEndpoint mocks the actual metadata endpoint by returning the passed data

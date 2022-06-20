@@ -19,7 +19,6 @@ package openstack
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"testing"
 )
 
@@ -72,16 +71,6 @@ func getTestData() *TestData {
 		clusterName: "test",
 		ips:         ips,
 		addrs:       addrs,
-	}
-}
-
-func assertTestResults(t *testing.T, err error, expected interface{}, actual interface{}) {
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if !reflect.DeepEqual(expected, actual) {
-		t.Fatalf("expected %+v, but got %+v", expected, actual)
 	}
 }
 
