@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -89,4 +90,21 @@ func TestParseIPFilterReturnsParsedIPv6CIDR(t *testing.T) {
 	actualIPFilter, err := parseIPFilter(o)
 
 	assertTestResults(t, err, expectedIPFilter, actualIPFilter)
+}
+
+func TestParseInitDefaultReturnsEmptyStringForIPFilter(t *testing.T) {
+	var o EtcdManagerOptions
+	o.InitDefaults()
+
+	assertTestResults(t, nil, "", o.IPFilter)
+}
+
+func TestParseInitDefaultReturnsValueOfEnvVarForIPFilter(t *testing.T) {
+	expectedIPFilter := "192.168.0.0/16"
+	os.Setenv("ETCD_MANAGER_IP_FILTER", expectedIPFilter)
+
+	var o EtcdManagerOptions
+	o.InitDefaults()
+
+	assertTestResults(t, nil, expectedIPFilter, o.IPFilter)
 }

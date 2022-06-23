@@ -195,7 +195,7 @@ func (o *EtcdManagerOptions) InitDefaults() {
 	o.EtcdInsecure = false
 	o.EtcdManagerMetricsPort = 0
 
-	o.IPFilter = ""
+	o.IPFilter = os.Getenv("ETCD_MANAGER_IP_FILTER")
 }
 
 func parseIPFilter(o *EtcdManagerOptions) (*net.IPNet, error) {
