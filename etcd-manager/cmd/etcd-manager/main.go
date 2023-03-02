@@ -100,6 +100,8 @@ func main() {
 	var volumeTags stringSliceFlag
 	flag.Var(&volumeTags, "volume-tag", "tag which volume is required to have")
 
+	flag.StringVar(&o.NetworkCIDR, "network-cidr", o.NetworkCIDR, "filter for a specific IP address by network CIDR (OpenStack only)")
+
 	flag.Parse()
 
 	o.VolumeTags = volumeTags
@@ -161,6 +163,9 @@ type EtcdManagerOptions struct {
 
 	// EtcdManagerMetricsPort allows exposing statistics from etcd-manager
 	EtcdManagerMetricsPort int
+
+	// NetworkCIDR allows filtering for a specific IP address by network CIDR (OpenStack only)
+	NetworkCIDR string
 }
 
 // InitDefaults populates the default flag values
@@ -191,6 +196,19 @@ func (o *EtcdManagerOptions) InitDefaults() {
 	o.EtcdManagerMetricsPort = 0
 }
 
+func parseNetworkCIDR(o *EtcdManagerOptions) (*net.IPNet, error) {
+	if o.NetworkCIDR == "" {
+		return nil, nil
+	}
+
+	if o.VolumeProviderID != "openstack" {
+		return nil, fmt.Errorf("is only supported with provider 'openstack'")
+	}
+
+	_, parsedCIDR, err := net.ParseCIDR(strings.TrimSpace(o.NetworkCIDR))
+	return parsedCIDR, err
+}
+
 // RunEtcdManager runs the etcd-manager, returning only we should exit.
 func RunEtcdManager(o *EtcdManagerOptions) error {
 	if o.ClusterName == "" {
@@ -199,6 +217,14 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 
 	if o.BackupStorePath == "" {
 		return fmt.Errorf("backup-store is required")
+	}
+
+	if o.NetworkCIDR == "" {
+		o.NetworkCIDR = os.Getenv("ETCD_MANAGER_NETWORK_CIDR")
+	}
+	networkCIDR, err := parseNetworkCIDR(o)
+	if err != nil {
+		return fmt.Errorf("network-cidr %s", err)
 	}
 
 	backupInterval, err := time.ParseDuration(o.BackupInterval)
@@ -243,7 +269,7 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 			discoveryProvider = gceVolumeProvider
 
 		case "openstack":
-			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag)
+			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag, networkCIDR)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)

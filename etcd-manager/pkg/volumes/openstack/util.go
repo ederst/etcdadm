@@ -18,6 +18,7 @@ package openstack
 
 import (
 	"fmt"
+	"net"
 )
 
 const (
@@ -26,7 +27,8 @@ const (
 	openstackAddress        = "addr"
 )
 
-func GetServerFixedIP(addrs map[string]interface{}, name string) (poolAddress string, err error) {
+func getAllServerFixedIPs(addrs map[string]interface{}) []string {
+	var fixedIPs []string
 	for _, address := range addrs {
 		if addresses, ok := address.([]interface{}); ok {
 			for _, addr := range addresses {
@@ -34,12 +36,28 @@ func GetServerFixedIP(addrs map[string]interface{}, name string) (poolAddress st
 				if addrType, ok := addrMap[openstackExternalIPType]; ok && addrType == openstackAddressFixed {
 					if fixedIP, ok := addrMap[openstackAddress]; ok {
 						if fixedIPStr, ok := fixedIP.(string); ok {
-							return fixedIPStr, nil
+							fixedIPs = append(fixedIPs, fixedIPStr)
 						}
 					}
 				}
 			}
 		}
 	}
+	return fixedIPs
+}
+
+func GetServerFixedIP(addrs map[string]interface{}, name string, networkCIDR *net.IPNet) (poolAddress string, err error) {
+	fixedIPs := getAllServerFixedIPs(addrs)
+
+	if networkCIDR != nil {
+		for _, fixedIP := range fixedIPs {
+			if networkCIDR.Contains(net.ParseIP(fixedIP)) {
+				return fixedIP, nil
+			}
+		}
+	} else if len(fixedIPs) > 0 {
+		return fixedIPs[0], nil
+	}
+
 	return "", fmt.Errorf("failed to find Fixed IP address for server %s", name)
 }
