@@ -100,7 +100,7 @@ func main() {
 	var volumeTags stringSliceFlag
 	flag.Var(&volumeTags, "volume-tag", "tag which volume is required to have")
 
-	flag.StringVar(&o.NetworkCIDR, "network-cidr", o.NetworkCIDR, "filtering for IP addresses by defining a comma separated list of CIDRs.")
+	flag.StringVar(&o.NetworkCIDR, "network-cidr", o.NetworkCIDR, "filtering for IP addresses by network CIDR (OpenStack only)")
 
 	flag.Parse()
 
