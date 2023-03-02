@@ -100,7 +100,7 @@ func main() {
 	var volumeTags stringSliceFlag
 	flag.Var(&volumeTags, "volume-tag", "tag which volume is required to have")
 
-	flag.StringVar(&o.NetworkCIDR, "network-cidr", o.NetworkCIDR, "filtering for IP addresses by network CIDR (OpenStack only)")
+	flag.StringVar(&o.NetworkCIDR, "network-cidr", o.NetworkCIDR, "filter for a specific IP address by network CIDR (OpenStack only)")
 
 	flag.Parse()
 
@@ -164,7 +164,7 @@ type EtcdManagerOptions struct {
 	// EtcdManagerMetricsPort allows exposing statistics from etcd-manager
 	EtcdManagerMetricsPort int
 
-	// NetworkCIDR allows filtering for specific IP address by defining a CIDR.
+	// NetworkCIDR allows filtering for a specific IP address by network CIDR (OpenStack only)
 	NetworkCIDR string
 }
 
