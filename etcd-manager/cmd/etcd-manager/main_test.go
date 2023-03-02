@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"testing"
 )
@@ -53,7 +52,7 @@ func TestParseNetworkCIDRReturnsNilByDefault(t *testing.T) {
 }
 
 func TestParseNetworkCIDRReturnsUnsupportedProviderError(t *testing.T) {
-	o := getTestData("192.168.0.0/16", "")
+	o := getTestData("192.168.0.0/16", "aws")
 
 	expectedErr := fmt.Errorf("is only supported with provider 'openstack'")
 
@@ -63,9 +62,10 @@ func TestParseNetworkCIDRReturnsUnsupportedProviderError(t *testing.T) {
 }
 
 func TestParseNetworkCIDRReturnsErrorOnInvalidCIDR(t *testing.T) {
-	o := getTestData("192.168.0.0/123, 2001:db8::/64", "openstack")
+	invalidCIDR := "192.168.0.0/123"
+	o := getTestData(invalidCIDR, "openstack")
 
-	expectedErr := &net.ParseError{Type: "CIDR address", Text: "192.168.0.0/123"}
+	expectedErr := &net.ParseError{Type: "CIDR address", Text: invalidCIDR}
 
 	_, actualErr := parseNetworkCIDR(o)
 
@@ -73,31 +73,12 @@ func TestParseNetworkCIDRReturnsErrorOnInvalidCIDR(t *testing.T) {
 }
 
 func TestParseNetworkCIDRReturnsParsedCIDR(t *testing.T) {
-	o := getTestData("192.168.0.0/16, 2001:db8::/64", "openstack")
+	cidr := "192.168.0.0/16"
+	o := getTestData(cidr, "openstack")
 
-	var expectedNetworkCIDRs []*net.IPNet
-	_, cidr1, _ := net.ParseCIDR("192.168.0.0/16")
-	_, cidr2, _ := net.ParseCIDR("2001:db8::/64")
-	expectedNetworkCIDRs = append(expectedNetworkCIDRs, cidr1, cidr2)
+	_, expectedNetworkCIDR, _ := net.ParseCIDR(cidr)
 
-	actualNetworkCIDRs, err := parseNetworkCIDR(o)
+	actualNetworkCIDR, err := parseNetworkCIDR(o)
 
-	assertTestResults(t, err, expectedNetworkCIDRs, actualNetworkCIDRs)
-}
-
-func TestParseInitDefaultReturnsEmptyStringForNetworkCIDRs(t *testing.T) {
-	var o EtcdManagerOptions
-	o.InitDefaults()
-
-	assertTestResults(t, nil, "", o.NetworkCIDR)
-}
-
-func TestParseInitDefaultReturnsValueOfEnvVarForNetworkCIDRs(t *testing.T) {
-	expectedNetworkCIDR := "192.168.0.0/16, 2001:db8::/64"
-	os.Setenv("ETCD_MANAGER_NETWORK_CIDR", expectedNetworkCIDR)
-
-	var o EtcdManagerOptions
-	o.InitDefaults()
-
-	assertTestResults(t, nil, expectedNetworkCIDR, o.NetworkCIDR)
+	assertTestResults(t, err, expectedNetworkCIDR, actualNetworkCIDR)
 }

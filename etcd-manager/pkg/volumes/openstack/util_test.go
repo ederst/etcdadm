@@ -97,29 +97,23 @@ func TestReturnFirstFixedIP(t *testing.T) {
 func TestReturnErrorOnNonMatchingCIDR(t *testing.T) {
 	td := getTestData()
 
-	var networkCIDRs []*net.IPNet
 	_, cidr, _ := net.ParseCIDR("172.16.0.0/16")
-	networkCIDRs = append(networkCIDRs, cidr)
 
 	expectedErr := fmt.Errorf("failed to find Fixed IP address for server %s", td.clusterName)
 
-	_, actualErr := GetServerFixedIP(td.addrs, td.clusterName, networkCIDRs)
+	_, actualErr := GetServerFixedIP(td.addrs, td.clusterName, cidr)
 
 	assertTestResults(t, nil, expectedErr, actualErr)
 }
 
-func TestReturnFirstIPMatchingCIDR(t *testing.T) {
+func TestReturnFirstIPv4MatchingCIDR(t *testing.T) {
 	td := getTestData()
 
-	var networkCIDRs []*net.IPNet
-	_, cidr1, _ := net.ParseCIDR("192.168.2.0/24")
-	_, cidr2, _ := net.ParseCIDR("2001:db8::/64")
-	networkCIDRs = append(networkCIDRs, cidr1, cidr2)
-	t.Log(networkCIDRs)
+	_, cidr, _ := net.ParseCIDR("192.168.2.0/24")
 
 	expectedIP := td.ips[3]
 
-	actualIP, err := GetServerFixedIP(td.addrs, td.clusterName, networkCIDRs)
+	actualIP, err := GetServerFixedIP(td.addrs, td.clusterName, cidr)
 
 	assertTestResults(t, err, expectedIP, actualIP)
 }
@@ -127,15 +121,11 @@ func TestReturnFirstIPMatchingCIDR(t *testing.T) {
 func TestReturnFirstIPv6MatchingCIDR(t *testing.T) {
 	td := getTestData()
 
-	var networkCIDRs []*net.IPNet
-	_, cidr1, _ := net.ParseCIDR("2001:db8::/64")
-	_, cidr2, _ := net.ParseCIDR("192.168.2.0/24")
-	networkCIDRs = append(networkCIDRs, cidr1, cidr2)
-	t.Log(networkCIDRs)
+	_, cidr, _ := net.ParseCIDR("2001:db8::/64")
 
 	expectedIP := td.ips[1]
 
-	actualIP, err := GetServerFixedIP(td.addrs, td.clusterName, networkCIDRs)
+	actualIP, err := GetServerFixedIP(td.addrs, td.clusterName, cidr)
 
 	assertTestResults(t, err, expectedIP, actualIP)
 }

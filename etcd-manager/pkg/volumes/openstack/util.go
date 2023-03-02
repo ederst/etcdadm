@@ -46,15 +46,13 @@ func getAllServerFixedIPs(addrs map[string]interface{}) []string {
 	return fixedIPs
 }
 
-func GetServerFixedIP(addrs map[string]interface{}, name string, networkCIDRs []*net.IPNet) (poolAddress string, err error) {
+func GetServerFixedIP(addrs map[string]interface{}, name string, networkCIDR *net.IPNet) (poolAddress string, err error) {
 	fixedIPs := getAllServerFixedIPs(addrs)
 
-	if networkCIDRs != nil {
-		for _, cidr := range networkCIDRs {
-			for _, fixedIP := range fixedIPs {
-				if cidr.Contains(net.ParseIP(fixedIP)) {
-					return fixedIP, nil
-				}
+	if networkCIDR != nil {
+		for _, fixedIP := range fixedIPs {
+			if networkCIDR.Contains(net.ParseIP(fixedIP)) {
+				return fixedIP, nil
 			}
 		}
 	} else if len(fixedIPs) > 0 {

@@ -164,9 +164,7 @@ type EtcdManagerOptions struct {
 	// EtcdManagerMetricsPort allows exposing statistics from etcd-manager
 	EtcdManagerMetricsPort int
 
-	// NetworkCIDR allows filtering for IP addresses by defining a comma separated list of CIDRs.
-	// When defining multiple CIDRs then etcd-manager uses the IP first matching the CIDR with the highest priority.
-	// The order of which the CIRRs are in define the priority, where the first item having the highest.
+	// NetworkCIDR allows filtering for specific IP address by defining a CIDR.
 	NetworkCIDR string
 }
 
@@ -196,11 +194,9 @@ func (o *EtcdManagerOptions) InitDefaults() {
 	o.Insecure = false
 	o.EtcdInsecure = false
 	o.EtcdManagerMetricsPort = 0
-
-	o.NetworkCIDR = os.Getenv("ETCD_MANAGER_NETWORK_CIDR")
 }
 
-func parseNetworkCIDR(o *EtcdManagerOptions) ([]*net.IPNet, error) {
+func parseNetworkCIDR(o *EtcdManagerOptions) (*net.IPNet, error) {
 	if o.NetworkCIDR == "" {
 		return nil, nil
 	}
@@ -209,19 +205,8 @@ func parseNetworkCIDR(o *EtcdManagerOptions) ([]*net.IPNet, error) {
 		return nil, fmt.Errorf("is only supported with provider 'openstack'")
 	}
 
-	var networkCIDRs []*net.IPNet
-
-	for _, cidr := range strings.Split(o.NetworkCIDR, ",") {
-		cidr = strings.TrimSpace(cidr)
-		_, parsedCIDR, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, err
-		}
-
-		networkCIDRs = append(networkCIDRs, parsedCIDR)
-	}
-
-	return networkCIDRs, nil
+	_, parsedCIDR, err := net.ParseCIDR(strings.TrimSpace(o.NetworkCIDR))
+	return parsedCIDR, err
 }
 
 // RunEtcdManager runs the etcd-manager, returning only we should exit.
@@ -234,7 +219,10 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 		return fmt.Errorf("backup-store is required")
 	}
 
-	networkCIDRs, err := parseNetworkCIDR(o)
+	if o.NetworkCIDR == "" {
+		o.NetworkCIDR = os.Getenv("ETCD_MANAGER_NETWORK_CIDR")
+	}
+	networkCIDR, err := parseNetworkCIDR(o)
 	if err != nil {
 		return fmt.Errorf("network-cidr %s", err)
 	}
@@ -281,7 +269,7 @@ func RunEtcdManager(o *EtcdManagerOptions) error {
 			discoveryProvider = gceVolumeProvider
 
 		case "openstack":
-			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag, networkCIDRs)
+			osVolumeProvider, err := openstack.NewOpenstackVolumes(o.ClusterName, o.VolumeTags, o.NameTag, networkCIDR)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
