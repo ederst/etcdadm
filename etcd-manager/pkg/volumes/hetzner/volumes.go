@@ -38,8 +38,9 @@ const (
 // HetznerVolumes defines the Hetzner Cloud volume implementation.
 type HetznerVolumes struct {
 	clusterName string
-	matchTags   map[string]string
-	nameTag     string
+
+	matchPeerTags map[string]string
+	matchNameTags map[string]string
 
 	hcloudClient *hcloud.Client
 	server       *hcloud.Server
@@ -51,7 +52,7 @@ var _ volumes.Volumes = &HetznerVolumes{}
 func NewHetznerVolumes(clusterName string, volumeTags []string, nameTag string) (*HetznerVolumes, error) {
 	serverID, err := metadata.NewClient().InstanceID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve server id: %s", err)
+		return nil, fmt.Errorf("failed to retrieve server id: %w", err)
 	}
 	klog.V(2).Infof("Found ID of the running server: %d", serverID)
 
@@ -66,7 +67,7 @@ func NewHetznerVolumes(clusterName string, volumeTags []string, nameTag string) 
 
 	server, _, err := hcloudClient.Server.GetByID(context.TODO(), serverID)
 	if err != nil || server == nil {
-		return nil, fmt.Errorf("failed to get info for the running server: %s", err)
+		return nil, fmt.Errorf("failed to get info for the running server: %w", err)
 	}
 
 	klog.V(2).Infof("Found name of the running server: %q", server.Name)
@@ -82,19 +83,30 @@ func NewHetznerVolumes(clusterName string, volumeTags []string, nameTag string) 
 	}
 
 	a := &HetznerVolumes{
-		clusterName:  clusterName,
-		matchTags:    make(map[string]string),
-		nameTag:      nameTag,
-		hcloudClient: hcloudClient,
-		server:       server,
+		clusterName:   clusterName,
+		matchPeerTags: make(map[string]string),
+		matchNameTags: make(map[string]string),
+		hcloudClient:  hcloudClient,
+		server:        server,
 	}
 
 	for _, volumeTag := range volumeTags {
 		tokens := strings.SplitN(volumeTag, "=", 2)
 		if len(tokens) == 1 {
-			a.matchTags[tokens[0]] = ""
+			a.matchPeerTags[tokens[0]] = ""
+			a.matchNameTags[tokens[0]] = ""
 		} else {
-			a.matchTags[tokens[0]] = tokens[1]
+			a.matchPeerTags[tokens[0]] = tokens[1]
+			a.matchNameTags[tokens[0]] = tokens[1]
+		}
+	}
+
+	{
+		tokens := strings.SplitN(nameTag, "=", 2)
+		if len(tokens) == 1 {
+			a.matchNameTags[tokens[0]] = ""
+		} else {
+			a.matchNameTags[tokens[0]] = tokens[1]
 		}
 	}
 
@@ -110,16 +122,16 @@ func (a *HetznerVolumes) FindVolumes() ([]*volumes.Volume, error) {
 	}
 	serverLocation := a.server.Datacenter.Location.Name
 
-	allEtcdVolumes, err := getMatchingVolumes(a.hcloudClient, a.matchTags)
+	matchingVolumes, err := getMatchingVolumes(a.hcloudClient, a.matchNameTags)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get matching volumes: %s", err)
+		return nil, fmt.Errorf("failed to get matching volumes: %w", err)
 	}
 
 	var localEtcdVolumes []*volumes.Volume
-	for _, volume := range allEtcdVolumes {
+	for _, volume := range matchingVolumes {
 		// Only volumes from the same location can be mounted
 		if volume.Location == nil {
-			klog.Warningf("failed to find volume location for %s(%d)", volume.Name, volume.ID)
+			klog.Warningf("failed to find volume %s(%d) location", volume.Name, volume.ID)
 			continue
 		}
 		volumeLocation := volume.Location.Name
@@ -164,7 +176,7 @@ func (a *HetznerVolumes) FindMountedVolume(volume *volumes.Volume) (string, erro
 	}
 
 	if !os.IsNotExist(err) {
-		return "", fmt.Errorf("failed to find local device %q: %v", device, err)
+		return "", fmt.Errorf("failed to find local device %q: %w", device, err)
 	}
 
 	// When not found, the interface says to return ("", nil)
@@ -173,40 +185,43 @@ func (a *HetznerVolumes) FindMountedVolume(volume *volumes.Volume) (string, erro
 
 // AttachVolume attaches the specified volume to the running server and returns the mountpoint if successful.
 func (a *HetznerVolumes) AttachVolume(volume *volumes.Volume) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
 	volumeID, err := strconv.Atoi(volume.ProviderID)
 	if err != nil {
 		return fmt.Errorf("failed to convert volume id %q to int: %w", volume.ProviderID, err)
 	}
 
-	for {
-		hetznerVolume, _, err := a.hcloudClient.Volume.GetByID(context.TODO(), volumeID)
-		if err != nil || hetznerVolume == nil {
-			return fmt.Errorf("failed to get info for volume id %q: %w", volume.ProviderID, err)
-		}
-
-		if hetznerVolume.Server != nil {
-			if hetznerVolume.Server.ID != a.server.ID {
-				return fmt.Errorf("found volume %s(%d) attached to a different server: %d", hetznerVolume.Name, hetznerVolume.ID, hetznerVolume.Server.ID)
-			}
-
-			klog.V(2).Infof("Attached volume %s(%d) to the running server", hetznerVolume.Name, hetznerVolume.ID)
-
-			volume.LocalDevice = fmt.Sprintf("%s%d", localDevicePrefix, hetznerVolume.ID)
-			return nil
-		}
-
-		klog.V(2).Infof("Attaching volume %s(%d) to the running server", hetznerVolume.Name, hetznerVolume.ID)
-
-		action, _, err := a.hcloudClient.Volume.Attach(context.TODO(), hetznerVolume, a.server)
-		if err != nil {
-			return fmt.Errorf("failed to attach volume %s(%d): %w", hetznerVolume.Name, hetznerVolume.ID, err)
-		}
-		if action.Status != hcloud.ActionStatusRunning && action.Status != hcloud.ActionStatusSuccess {
-			return fmt.Errorf("found invalid status for volume %s(%d): %s", hetznerVolume.Name, hetznerVolume.ID, action.Status)
-		}
-
-		time.Sleep(10 * time.Second)
+	hetznerVolume, _, err := a.hcloudClient.Volume.GetByID(ctx, volumeID)
+	if err != nil || hetznerVolume == nil {
+		return fmt.Errorf("failed to get info for volume id %q: %w", volume.ProviderID, err)
 	}
+
+	if hetznerVolume.Server != nil {
+		if hetznerVolume.Server.ID != a.server.ID {
+			return fmt.Errorf("found volume %s(%d) attached to a different server: %d", hetznerVolume.Name, hetznerVolume.ID, hetznerVolume.Server.ID)
+		}
+
+		klog.V(2).Infof("Attached volume %s(%d) to the running server", hetznerVolume.Name, hetznerVolume.ID)
+
+		volume.LocalDevice = fmt.Sprintf("%s%d", localDevicePrefix, hetznerVolume.ID)
+		return nil
+	}
+
+	klog.V(2).Infof("Attaching volume %s(%d) to the running server", hetznerVolume.Name, hetznerVolume.ID)
+
+	action, _, err := a.hcloudClient.Volume.Attach(ctx, hetznerVolume, a.server)
+	if err != nil {
+		return fmt.Errorf("failed to attach volume %s(%d): %w", hetznerVolume.Name, hetznerVolume.ID, err)
+	}
+
+	_, errCh := a.hcloudClient.Action.WatchProgress(ctx, action)
+	if err := <-errCh; err != nil {
+		return fmt.Errorf("failed to wait for volume to %s(%d) be ready: %w", hetznerVolume.Name, hetznerVolume.ID, err)
+	}
+
+	return nil
 }
 
 // MyIP returns the first private IP of the running server if successful.

@@ -27,15 +27,17 @@ import (
 
 // Literal represents a literal in terraform syntax
 type Literal struct {
-	// Value is used to support Terraform's "${}" interpolation
+	// String is the Terraform representation.
+	String string `cty:"string"`
+	// Value is used to support Terraform's "${}" interpolation.
 	Value string `cty:"value"`
+	// Index to support the index of the count meta-argument.
+	Index bool `cty:"index"`
 
 	// Tokens are portions of a literal reference joined by periods.
 	// example: {"aws_vpc", "foo", "id"}
 	Tokens []string `cty:"tokens"`
 
-	// FnName represents the name of a terraform function.
-	FnName string `cty:"fn_name"`
 	// FnArgs contains string representations of arguments to the function call.
 	// Any string arguments must be quoted.
 	FnArgs []string `cty:"fn_arg"`
@@ -47,16 +49,25 @@ func (l *Literal) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&l.Value)
 }
 
-func LiteralFunctionExpression(functionName string, args []string) *Literal {
+func LiteralFunctionExpression(functionName string, args ...string) *Literal {
 	return &Literal{
+		String: fmt.Sprintf("%v(%v)", functionName, strings.Join(args, ", ")),
 		Value:  fmt.Sprintf("${%v(%v)}", functionName, strings.Join(args, ", ")),
-		FnName: functionName,
 		FnArgs: args,
 	}
 }
 
 func LiteralSelfLink(resourceType, resourceName string) *Literal {
 	return LiteralProperty(resourceType, resourceName, "self_link")
+}
+
+func LiteralData(dataSourceType, dataSourceName, prop string) *Literal {
+	tfName := sanitizeName(dataSourceName)
+	expr := "${data." + dataSourceType + "." + tfName + "." + prop + "}"
+	return &Literal{
+		Value:  expr,
+		Tokens: []string{"data", dataSourceType, tfName, prop},
+	}
 }
 
 func LiteralProperty(resourceType, resourceName, prop string) *Literal {
@@ -78,6 +89,10 @@ func LiteralTokens(tokens ...string) *Literal {
 
 func LiteralFromStringValue(s string) *Literal {
 	return &Literal{Value: s}
+}
+
+func LiteralWithIndex(s string) *Literal {
+	return &Literal{Value: s, Index: true}
 }
 
 type literalWithJSON struct {
