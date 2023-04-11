@@ -6,7 +6,7 @@ load(
     "container_layer",
     "container_push",
 )
-load("etcd.bzl", "supported_etcd_arch_and_version")
+load(":etcd.bzl", "supported_etcd_arch_and_version")
 
 # Layer for etcd 3.1.12, as used in k8s 1.10
 # Layer for etcd 3.2.18, as originally used in k8s 1.11
@@ -21,14 +21,14 @@ load("etcd.bzl", "supported_etcd_arch_and_version")
 # Layer for etcd 3.5.3, updated recommendation for k8s 1.22 and later
 # Layer for etcd 3.5.4, updated recommendation for k8s 1.22 and later
 # Layer for etcd 3.5.6, updated recommendation for k8s 1.22 and later
+# Layer for etcd 3.5.7, updated recommendation for k8s 1.22 and later
 [
     container_layer(
         name = "etcd-{version}-layer-{arch}".format(
             arch = arch,
             version = version,
         ),
-        directory = "/opt/etcd-v{version}-linux-{arch}/".format(
-            arch = arch,
+        directory = "/opt/etcd-v{version}/".format(
             version = version,
         ),
         files = [
@@ -70,6 +70,7 @@ container_image(
             "etcd-3.5.3-layer-amd64",
             "etcd-3.5.4-layer-amd64",
             "etcd-3.5.6-layer-amd64",
+            "etcd-3.5.7-layer-amd64",
         ],
         "@io_bazel_rules_go//go/platform:arm64": [
             "etcd-3.2.18-layer-arm64",
@@ -84,6 +85,7 @@ container_image(
             "etcd-3.5.3-layer-arm64",
             "etcd-3.5.4-layer-arm64",
             "etcd-3.5.6-layer-arm64",
+            "etcd-3.5.7-layer-arm64",
         ],
     }),
 )
@@ -106,12 +108,45 @@ container_image(
     ],
 )
 
+container_image(
+    name = "etcd-manager-slim",
+    architecture = select({
+        "@io_bazel_rules_go//go/platform:amd64": "amd64",
+        "@io_bazel_rules_go//go/platform:arm64": "arm64",
+    }),
+    base = select({
+        "@io_bazel_rules_go//go/platform:amd64": "//images/base:base_image_amd64",
+        "@io_bazel_rules_go//go/platform:arm64": "//images/base:base_image_arm64",
+    }),
+    entrypoint = ["/etcd-manager"],
+    env = select({
+        "@io_bazel_rules_go//go/platform:amd64": {},
+        "@io_bazel_rules_go//go/platform:arm64": {"ETCD_UNSUPPORTED_ARCH": "arm64"},
+    }),
+    files = [
+        "//cmd/etcd-manager",
+        "//cmd/etcd-manager-ctl",
+    ],
+)
+
 container_push(
     name = "push-etcd-manager",
     format = "Docker",
     image = ":etcd-manager",
     registry = "{STABLE_DOCKER_REGISTRY}",
     repository = "{STABLE_DOCKER_IMAGE_PREFIX}etcd-manager",
+    tag = select({
+        "@io_bazel_rules_go//go/platform:amd64": "{STABLE_DOCKER_TAG}-amd64",
+        "@io_bazel_rules_go//go/platform:arm64": "{STABLE_DOCKER_TAG}-arm64",
+    }),
+)
+
+container_push(
+    name = "push-etcd-manager-slim",
+    format = "Docker",
+    image = ":etcd-manager-slim",
+    registry = "{STABLE_DOCKER_REGISTRY}",
+    repository = "{STABLE_DOCKER_IMAGE_PREFIX}etcd-manager-slim",
     tag = select({
         "@io_bazel_rules_go//go/platform:amd64": "{STABLE_DOCKER_TAG}-amd64",
         "@io_bazel_rules_go//go/platform:arm64": "{STABLE_DOCKER_TAG}-arm64",
